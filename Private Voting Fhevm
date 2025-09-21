@@ -1,0 +1,111 @@
+# Private Voting FHEVM Starter Project (Auto-Network Setup)
+
+Now the frontend automatically prompts MetaMask to add & switch to the correct network if needed.
+
+---
+
+## `frontend/src/App.jsx`
+```jsx
+import { useState, useEffect } from "react";
+import { ethers } from "ethers";
+import { initFhevm, createInstance } from "fhevmjs";
+import PrivateVotingABI from "./abis/PrivateVoting.json";
+import contractAddress from "./contract-address.json";
+
+const CONTRACT_ADDRESS = contractAddress.PrivateVoting;
+
+export default function App() {
+  const [status, setStatus] = useState("");
+
+  useEffect(() => {
+    async function ensureNetwork() {
+      if (!window.ethereum) return;
+      const chainId = await window.ethereum.request({ method: "eth_chainId" });
+      if (chainId !== "0x7a69") { // 0x7a69 = 31337 in hex (Hardhat local chain)
+        try {
+          await window.ethereum.request({
+            method: "wallet_addEthereumChain",
+            params: [{
+              chainId: "0x7a69",
+              chainName: "Hardhat Localhost",
+              rpcUrls: ["http://127.0.0.1:8545"],
+              nativeCurrency: {
+                name: "ETH",
+                symbol: "ETH",
+                decimals: 18,
+              },
+            }],
+          });
+          await window.ethereum.request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: "0x7a69" }],
+          });
+        } catch (err) {
+          console.error("Failed to add/switch network:", err);
+        }
+      }
+    }
+    ensureNetwork();
+  }, []);
+
+  async function handleVote(isForA) {
+    try {
+      setStatus("Encrypting vote...");
+      await initFhevm();
+      const fhe = await createInstance({ network: window.ethereum });
+      const encryptedOne = await fhe.encrypt64(1);
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, PrivateVotingABI, signer);
+
+      setStatus("Sending vote transaction...");
+      const tx = await contract.vote(isForA, encryptedOne);
+      await tx.wait();
+      setStatus("Vote recorded!");
+    } catch (err) {
+      console.error(err);
+      setStatus("Error: " + err.message);
+    }
+  }
+
+  return (
+    <div className="p-4">
+      <h1 className="text-2xl font-bold">Private Voting dApp</h1>
+      <button onClick={() => handleVote(true)} className="m-2 p-2 bg-blue-500 text-white rounded">
+        Vote for Option A
+      </button>
+      <button onClick={() => handleVote(false)} className="m-2 p-2 bg-green-500 text-white rounded">
+        Vote for Option B
+      </button>
+      <p>{status}</p>
+    </div>
+  );
+}
+```
+
+---
+
+## README.md (update)
+```md
+# Private Voting FHEVM Tutorial (Auto-Network)
+
+### Features
+- Auto-deploy address + ABI
+- One-command dev setup (`npm run start-dev`)
+- Auto-prompt MetaMask to add/switch to Hardhat local network
+
+## Quickstart
+1. Open repo in Codespaces.
+2. Install dependencies:
+   ```bash
+   npm install
+   cd frontend && npm install && cd ..
+   ```
+3. Start everything:
+   ```bash
+   npm run start-dev
+   ```
+4. Open forwarded port — MetaMask will auto-prompt to switch to Hardhat network.
+5. Vote privately!
+```
