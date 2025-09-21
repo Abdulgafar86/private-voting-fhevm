@@ -1,0 +1,27 @@
+import { initFhevm, createInstance } from "fhevmjs";
+import { ethers } from "ethers";
+import PrivateVotingABI from "./abis/PrivateVoting.json";
+
+async function vote(isForA) {
+  await initFhevm(); // loads TFHE WASM modules
+  const fhe = await createInstance({
+    network: window.ethereum,
+    gatewayUrl: "https://gateway.cypherscan.ai", // example gateway
+  });
+
+  // NOTE: exact encrypt function name depends on fhevmjs API in your version.
+  // use the helper from the template (useFhevm/useFHECounter) or the docs.
+  // here's an illustrative call:
+  const encryptedOne = await fhe.encryptUint64(1); // <- check your installed fhevmjs API
+  // encryptedOne must be passed in the format contract expects (bytes / calldata)
+
+  // connect contract
+  const provider = new ethers.providers.Web3Provider(window.ethereum);
+  const signer = provider.getSigner();
+  const contract = new ethers.Contract(CONTRACT_ADDRESS, PrivateVotingABI, signer);
+
+  // send tx: vote(bool isForA, bytes encryptedOne)
+  const tx = await contract.vote(isForA, encryptedOne, { gasLimit: 500_000 });
+  await tx.wait();
+  console.log("vote tx mined");
+}
